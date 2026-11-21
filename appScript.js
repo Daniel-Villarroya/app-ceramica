@@ -1,3 +1,47 @@
+//---------------TECLADO Y PANTALLA (iOS)----------------//
+// En iOS, al abrir el teclado la página se desplaza y al cerrarlo a veces no vuelve a su sitio.
+// - Las ventanas flotantes se ajustan a la zona visible (--app-height / --app-top).
+// - Al cerrar el teclado se devuelve la página a su posición.
+const docRoot = document.documentElement;
+
+function syncViewport() {
+  const vv = window.visualViewport;
+  docRoot.style.setProperty('--app-height', (vv ? vv.height : window.innerHeight) + 'px');
+  docRoot.style.setProperty('--app-top', (vv ? vv.offsetTop : 0) + 'px');
+}
+
+function isTypingElement(el) {
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+}
+
+function resetPageScroll() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
+syncViewport();
+window.addEventListener('resize', syncViewport);
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('scroll', syncViewport);
+  window.visualViewport.addEventListener('resize', () => {
+    syncViewport();
+    // Teclado cerrado (la zona visible vuelve a ser toda la pantalla)
+    if (window.visualViewport.height >= window.innerHeight - 1) resetPageScroll();
+  });
+}
+
+document.addEventListener('focusout', (e) => {
+  if (!isTypingElement(e.target)) return;
+  [100, 400].forEach(delay => setTimeout(() => {
+    if (!isTypingElement(document.activeElement)) {
+      resetPageScroll();
+      syncViewport();
+    }
+  }, delay));
+});
+
 const buttons = document.querySelectorAll('.options_button');
 const close_product_creator = document.getElementById('close_creator');
 const close_view = document.getElementById('close_view');
@@ -89,6 +133,52 @@ const account_name = document.getElementById('account_name');
 const account_email = document.getElementById('account_email');
 const logout_button = document.getElementById('logout_button');
 
+const login_notice = document.getElementById('login_notice');
+const register_form = document.getElementById('register_form');
+const reg_name = document.getElementById('reg_name');
+const reg_email = document.getElementById('reg_email');
+const reg_password = document.getElementById('reg_password');
+const reg_password2 = document.getElementById('reg_password2');
+const reg_error = document.getElementById('reg_error');
+const register_submit = document.getElementById('register_submit');
+const show_register = document.getElementById('show_register');
+const show_login = document.getElementById('show_login');
+
+let authMode = 'login';           // 'login' | 'register'
+let suppressAuthEvents = false;   // true mientras se crea una cuenta
+
+// Muestra el formulario que toque: login, registro o la cuenta ya iniciada
+function renderAuthForms() {
+  const loggedOut = !currentAdminUser;
+  login_form.hidden = !(loggedOut && authMode === 'login');
+  register_form.hidden = !(loggedOut && authMode === 'register');
+  account_card.hidden = loggedOut;
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  login_error.textContent = '';
+  reg_error.textContent = '';
+  renderAuthForms();
+}
+
+show_register.addEventListener('click', () => {
+  login_notice.textContent = '';
+  setAuthMode('register');
+});
+show_login.addEventListener('click', () => setAuthMode('login'));
+
+function friendlySignUpError(error) {
+  const msg = ((error && error.message) || '').toLowerCase();
+  if (msg.includes('already registered') || msg.includes('already been registered')) return 'Ya existe una cuenta con ese correo.';
+  if (msg.includes('invalid') && msg.includes('email')) return 'El correo no es válido.';
+  if (msg.includes('password')) return 'La contraseña es demasiado corta o débil.';
+  if (msg.includes('rate limit') || msg.includes('too many')) return 'Demasiados intentos. Espera un poco y vuelve a probar.';
+  if (msg.includes('signups not allowed') || msg.includes('signup is disabled')) return 'El registro está desactivado en Supabase.';
+  if (msg.includes('fetch') || msg.includes('network')) return 'No hay conexión con el servidor.';
+  return 'No se pudo crear la cuenta. Inténtalo de nuevo.';
+}
+
 function friendlyAuthError(error) {
   const msg = ((error && error.message) || '').toLowerCase();
   if (msg.includes('invalid login credentials')) return 'Correo o contraseña incorrectos.';
@@ -109,8 +199,7 @@ function setLoggedOut() {
   currentAdminUser = null;
   currentProfile = null;
 
-  login_form.hidden = false;
-  account_card.hidden = true;
+  renderAuthForms();
 
   resetChats();
   products = [];
@@ -127,8 +216,7 @@ function setLoggedIn(user, profile) {
   account_email.textContent = profile.email || user.email || '';
 
   login_error.textContent = '';
-  login_form.hidden = true;
-  account_card.hidden = false;
+  renderAuthForms();
 
   loadProducts();
   startChats();
@@ -179,6 +267,7 @@ async function applySession() {
 login_form.addEventListener('submit', async (e) => {
   e.preventDefault();
   login_error.textContent = '';
+  login_notice.textContent = '';
 
   if (!supabaseReady) {
     login_error.textContent = 'No se pudo conectar con Supabase. Revisa los scripts de index.html.';
@@ -215,6 +304,76 @@ logout_button.addEventListener('click', async () => {
   setLoggedOut();
 });
 
+register_form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  reg_error.textContent = '';
+
+  if (!supabaseReady) {
+    reg_error.textContent = 'No se pudo conectar con Supabase. Revisa los scripts de index.html.';
+    return;
+  }
+
+  const name = reg_name.value.trim();
+  const email = reg_email.value.trim();
+  const password = reg_password.value;
+
+  if (!name || !email || !password) {
+    reg_error.textContent = 'Rellena todos los campos.';
+    return;
+  }
+  if (password.length < 6) {
+    reg_error.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+    return;
+  }
+  if (password !== reg_password2.value) {
+    reg_error.textContent = 'Las contraseñas no coinciden.';
+    return;
+  }
+
+  register_submit.disabled = true;
+  register_submit.textContent = 'Creando cuenta...';
+  suppressAuthEvents = true;   // no queremos que el login automático dispare applySession
+
+  try {
+    const { data, error } = await db.auth.signUp({
+      email,
+      password,
+      options: { data: { user_name: name } }
+    });
+
+    if (error) {
+      reg_error.textContent = friendlySignUpError(error);
+      return;
+    }
+
+    // Correo ya registrado: Supabase no da error, devuelve un usuario sin identidades
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      reg_error.textContent = 'Ya existe una cuenta con ese correo.';
+      return;
+    }
+
+    let message;
+    if (data.session) {
+      // Sin confirmación por correo: ya hay sesión. Intentamos guardar el perfil en la tabla users
+      // (si un trigger de Supabase ya lo crea, esto no cambia nada) y cerramos: aún no es admin.
+      await db.from('users').upsert({ id: data.user.id, user_name: name, email }, { onConflict: 'id' });
+      await db.auth.signOut();
+      message = 'Cuenta creada. Un administrador debe darte permisos antes de que puedas entrar.';
+    } else {
+      message = 'Cuenta creada. Confirma tu correo y después un administrador debe darte permisos para entrar.';
+    }
+
+    register_form.reset();
+    login_email.value = email;
+    setAuthMode('login');
+    login_notice.textContent = message;
+  } finally {
+    suppressAuthEvents = false;
+    register_submit.disabled = false;
+    register_submit.textContent = 'Crear cuenta';
+  }
+});
+
 function initAuth() {
   if (!supabaseReady) {
     login_error.textContent = 'No se pudo conectar con Supabase. Revisa los scripts de index.html.';
@@ -223,7 +382,7 @@ function initAuth() {
   }
 
   db.auth.onAuthStateChange((event) => {
-    if (event === 'TOKEN_REFRESHED') return;
+    if (event === 'TOKEN_REFRESHED' || suppressAuthEvents) return;
     // No se llama a Supabase dentro del propio callback (puede bloquearse): se aplaza
     setTimeout(applySession, 0);
   });

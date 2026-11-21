@@ -1,6 +1,18 @@
 @import url('https://fonts.cdnfonts.com/css/mona-sans');
 
+html{
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 .body{
+    /* fixed + margin 0: iOS no puede desplazar la página cuando sale el teclado */
+    position: fixed;
+    top: 0;
+    left: 0;
+    margin: 0;
+
     display: flex;
     justify-content: center;
     overflow: hidden;
@@ -8,6 +20,7 @@
     
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
 
     overscroll-behavior: none;
     overscroll-behavior-y: none;
@@ -38,6 +51,7 @@
     left: 0;
     top: 0;
     height: 100vh;
+    height: 100dvh;
 
     width: 100vw; 
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
@@ -53,6 +67,7 @@
     align-items: center;
     scroll-snap-align: start;
     height: 100vh;
+    height: 100dvh;
     
     width: 100vw; 
 
@@ -149,10 +164,10 @@
     box-sizing: border-box;
 
     background: rgb(255, 255, 255);
-    height: 100vh;
+    height: var(--app-height, 100vh); /* la pone el JS: zona visible sin teclado */
     width: 100vw;
 
-    top: 0;
+    top: var(--app-top, 0px);
     left: 0;
 
     padding-top: env(safe-area-inset-top, 0px);
@@ -458,7 +473,9 @@ textarea.text_input{
 
     box-sizing: border-box;
     min-height: 100vh;
+    min-height: 100dvh;
     height: 100vh;
+    height: 100dvh;
     width: 100vw;
     top: 0;
     left: 0;
@@ -541,6 +558,7 @@ textarea.text_input{
     box-sizing: border-box;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     padding: calc(24px + env(safe-area-inset-top, 0px)) 5vw 130px 5vw;
 
     overflow-x: hidden;
@@ -777,7 +795,8 @@ textarea.text_input{
 
 /* PÁGINA DE USUARIO */
 
-#login_form .field_label{
+#login_form .field_label,
+#register_form .field_label{
     margin-top: 16px;
 }
 
@@ -825,8 +844,7 @@ textarea.text_input{
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    height: 100vh;
-    height: 100dvh;
+    height: var(--app-height, 100vh);
     background: rgb(245, 244, 242);
 }
 
@@ -1045,4 +1063,35 @@ textarea.text_input{
     .message.new{
         animation: none;
     }
+}
+
+/* REGISTRO */
+
+.notice_text{
+    margin: 12px 0 0 0;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #0B5C34;
+    background: #E3F5EA;
+    border-radius: 10px;
+}
+
+.notice_text:empty{
+    display: none;
+}
+
+.link_button{
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 8px;
+
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #0B76C2;
+    background: none;
+    border: none;
+    cursor: pointer;
 }
